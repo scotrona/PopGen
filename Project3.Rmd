@@ -1,0 +1,220 @@
+---
+title: "Project3"
+author: "Sierra Cotrona Gentry"
+date: "10/21/2021"
+output: html_document
+---
+In R we can simulate the process of gene selection that influences the variation of an allele frequency over time. 
+We'll start by establishing initial allele frequency, number of generations, and population size and plot it. The first plot will be a neutral reference point. 
+```{r}
+p<-0.25
+gen<-100
+N<-1000
+plot(x=NULL,y=NULL,xlim=c(1,gen),ylim=c(0,1),xlab="Generations",ylab="Allele Frequency")
+for (j in 1:(gen-1)) {
+  a<-rbinom(n=1,size=2*N,prob=p[j])
+  f<-a/(2*N)
+  p<-c(p,f)
+}
+lines(x=1:gen,y=p,lwd=2)
+```
+As expected, allele frequency drifts without a particular direction over time. Now that a neutral position is established, we can explore what happens when selection influences the change in allele frequencies over time.  
+```{r}
+p<-0.25
+gen<-100
+N<-1000
+s<-0.1
+plot(x=NULL,y=NULL,xlim=c(1,gen),ylim=c(0,1),xlab="Generations",ylab="Allele Frequency")
+for (j in 1:(gen-1)) {
+  a<-rbinom(n=1,size=2*N,prob=p[j])
+  f<-a/(2*N)
+  p<-c(p,(f*(1+s))/(f*s+1))
+}
+lines(x=1:gen,y=p,lwd=2)
+```
+The fitness advantage has a significant effect on allele frequencies. From the first graph, genic frequencies have changed drastically over generations. 
+```{r}
+p<-0.25
+gen<-100
+N<-10
+s<-0.1
+plot(x=NULL,y=NULL,xlim=c(1,gen),ylim=c(0,1),xlab="Generations",ylab="Allele Frequency")
+for (j in 1:(gen-1)) {
+  a<-rbinom(n=1,size=2*N,prob=p[j])
+  f<-a/(2*N)
+  p<-c(p,(f*(1+s))/(f*s+1))
+}
+lines(x=1:gen,y=p,lwd=2)
+```
+A small population size leads to drastic changes in frequency over time as well. Fixation and extinction events in a very small population may occur at random even if the allele is advantageous. 
+Creating a list for storing multi-tiered information and learning how to access it
+```{r}
+cool<-list(c(1,2,3),c("ABAC"),matrix(c(1,2,3)),data.frame(x=1:3,y=1:3))
+str(cool)
+cool[[1]]
+cool[[1]] [3]
+cool[[4]][1]
+cool[[4]][1,]
+```
+Allele frequency projections for three fitness scenarios will be defined using the same list function. Allele frequencies and number of generations to be run are set as before as well. 
+Also performed is a function to calculate projected allele frequency.
+```{r}
+init_p<-0.05
+gen<-400
+rec<-c(1.1,1)
+dom<-c(1.1,1.1)
+sem<-c(1.1,1.05)
+p<-matrix(c(init_p,init_p,init_p))
+w<-list(rec,dom,sem)
+FitFreq<-function(X,p) {
+  w_total<-X[1]*p^2+X[2]*2*p*(1-p)+(1-p)^2
+  p_t<-(X[1]*p^2+X[2]*p*(1-p))/w_total
+  return(p_t)
+}
+for (i in 1: (gen-1)) {
+  p<-cbind(p,lapply(seq_along(w),
+                    function(j,y,n) {FitFreq(y[[j]], n[[j]])},
+                    y=w,n=p[,ncol(p)]))
+}
+plot(x=NULL,xlab="Generations",ylab="Allele Frequency",xlim=c(1,gen),ylim=c(0,1))
+colors<-c("orange","darkgreen","cyan")
+line<-c(1,2,4)
+for(i in 1:nrow(p)) {
+  lines(1:gen,p[i,],lwd=2,lty=line[i],col=colors[i])
+}
+legend("bottomleft", 
+       legend=c("Recessive","Dominant","Semi Dominant"),
+       inset=c(0,1),xpd=TRUE,bty="n",
+       col=colors,lty=line,lwd=2)
+```
+From the graph, dominant fitness effects rise faster initially in frequency when they are rare but slow at higher frequencies. Recessive fitness shows the opposite. Semi-dominant fitness appears to be the most efficient rise to fixation. 
+For the moth dataset, a linear regression:
+```{r}
+library (popgenr)
+data (moth)
+years<-moth$Years
+freq<-moth$p
+logit<-log(freq/(1-freq))
+plot (years, logit)
+(linear<-lm(logit~years))
+abline(linear)
+(obs_r<-summary(linear)$r.squared)
+```
+Allele is apparently increasing over time. The slope of the line is the difference in fitness between heterozygotes carrying one copy of the allele and homozygotes carrying two copies. 
+Taking previous code for genetic drift with a larger population size:
+```{r}
+initp<-0.908
+gen<-8
+years<-c(1:gen)
+reps<-10000
+count<-0
+N<-1000
+for(i in 1:reps) {
+  p<-initp
+  for(j in 1:(gen-1)) {
+  a<-rbinom(1,2*N,p[j]) 
+  p<-c(p,a/(2*N))
+  }
+  logit<-log(p/(1-p))
+  reg<-lm(logit~years)
+  sim_r<-summary(reg)$r.squared
+  if(obs_r<=sim_r) {
+    count=count+1
+  }
+}
+count/reps
+```
+The probability of seeing observed data due to drift is 33%, and acts as a cautionary tale to inferring selection. 
+To validate observed and expected proportions under HW of published genotypes from a study of hemoglobin in Tanzania:
+```{r}
+AA<-400
+AS<-249
+SS<-5
+n<-AA+AS+SS
+print(paste("n:",n))
+p<-(SS+AS/2)/n
+print(paste("p:",p))
+EAA <- n*(1-p)^2
+EAS <- n*2*p*(1-p)
+ESS <- n*p^2
+print(paste("Observed",AA/n,AS/n,SS/n))
+print(paste("Expected:",EAA/n,EAS/n,ESS/n))
+geno <- c (AA, AS, SS)
+expe <- c (EAA, EAS, ESS)
+G <- 2 * sum (geno * log (geno/expe))
+print (paste("G:", G))
+pvalue <- pchisq(G, df = 1, lower.tail = FALSE)
+print (paste ("P-value:", pvalue))
+```
+Values deviate from HW predictions. We can calculate sassumed heterozytgote fitness. 
+```{r}
+p
+w_ss<-0.2
+w_aa<-1
+(w_sa<-(p*(0.2+1)-1)/(2*p-1))
+```
+```{r}
+init_p<-p
+w_ss<-0.2
+w_aa<-1
+w_sa
+gen<-50
+w<-list(c(w_ss,w_sa))
+p<-matrix(c(0.01,0.1,0.2,0.5,0.9))
+FitFreq<-function(X,p) {
+  w_total<-X[1]*p^2+X[2]*2*p*(1-p)+(1-p)^2
+  p_t<-(X[1]*p^2+X[2]*p*(1-p))/w_total
+  return(p_t)
+}
+iter<-seq_along(p)
+for(i in 1:(gen-1)) {
+  p<-cbind(p,lapply(iter,
+                    function(i,y,n) {FitFreq(y[[1]], n[[i]])},
+                    y=w,n=p[,ncol(p)]))
+}
+plot(x=NULL, xlab="Generations", ylab="Allele frequency",xlim=c(1,2*gen),ylim=c(0,1))
+for(i in 1:nrow(p)) {
+  lines(1:gen,p[i,],lwd=2,col="blue")
+}
+w<-list(c(w_ss,1))
+p<-matrix(init_p)
+iter<-seq_along(p)
+for(i in 1:gen) {
+  p<-cbind(p,lapply(iter,
+                    function(i,y,n) {FitFreq(y[[1]],n[[i]])},
+                    y=w,n=p[,ncol(p)]))
+}
+for(i in 1:nrow(p)) {
+  lines(gen:(2*gen),p[i,],lwd=2,col="red")
+}
+```
+If fitness advantage is lost, and the heterozygotes are equal in fitness to the common homozygote, the s allele is predicted to drop equilibrium frequency and rate of ss homozygotes would drop two orders of magnitude.
+Now to assume under dominance
+```{r}
+w_ss<-0.9
+w_sa<-0.5
+(p_eq<-(1-w_sa)/(w_ss-2*w_sa+1))
+```
+```{r}
+gen<-20
+w<-list(c(w_ss,w_sa))
+p<-matrix(seq(0.1,0.9,0.1))
+iter<-seq_along(p)
+for(i in 1:(gen-1)) {
+  p<-cbind(p,lapply(iter,
+                    function(i,y,n) {FitFreq(y[[1]], n[[i]])},
+                    y=w,n=p[,ncol(p)]))
+}
+plot(x=NULL, xlab="Generations", ylab="Allele frequency",xlim=c(1,gen),ylim=c(0,1))
+for(i in 1:nrow(p)) {
+  lines(1:gen,p[i,],lwd=2,col="blue")
+}
+p<-matrix(p_eq)
+for(i in 1:gen) {
+  p<-cbind(p,lapply(1,
+                    function(i,y,n) {FitFreq(y[[1]],n[[i]])},
+                    y=w,n=p[,ncol(p)]))
+}
+lines(1:gen,p,lwd=2,lty="dashed",col="blue")
+```
+
