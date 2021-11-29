@@ -1,0 +1,146 @@
+---
+title: "Project 4"
+author: "Sierra Cotrona Gentry"
+date: "11/20/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Heterozygosity is a tool to measure diversity. Expected heterozygosity can be compared to observed heterozygosity.
+Following we have two arbitrary allele frequencies, from which we calculate observed measures of heterozygosity, average allele frequency, and expected heterozygosity.
+```{r}
+p1<-0.15
+p2<-0.7
+h1<-2*p1*(1-p1)
+h2<-2*p2*(1-p2)
+p_ave<-(p1+p2)/2
+ht<-2*p_ave*(1-p_ave)
+hs<-(h1+h2)/2
+curve(2*x*(1-x),from=0,to=1,xlab="Allele Frequency",ylab="Heterozygotes", lwd=2)
+points(c(p1,p2),c(h1,h2),cex=2,pch=16)
+points(c(p_ave,p_ave),c(hs,ht),cex=2)
+text(x=p1,y=h1-0.03,"H1")
+text(x=p2,y=h2-0.03,"H2")
+text(x=p_ave,y=hs-0.03,"HS")
+text(x=p_ave+0.03,y=ht-0.03,"HT")
+lines(c(p1,p2),c(h1,h2),lty=2)
+lines(c(p_ave,p_ave),c(hs,ht))
+```
+Expected heterozygosity is graphed with a downward curve. 
+We're revisiting a dataset seen previously to look at observed and expected heterozygosity. 
+```{r}
+library(popgenr)
+data(snp)
+h_exp<-2*snp$p*(1-snp$p)
+fst<-(h_exp-snp$het)/h_exp
+mean(fst)
+```
+Fst is about 9% missing heterozygosity. To test whether this is statistically significant:
+```{r}
+wilcox.test(h_exp,snp$het,exact=FALSE,paired=TRUE,alternative="greater")
+```
+We know populations are different, but we do not know why they are different. Wilcox was used because it does not assume underlying distribution of the data. 
+```{r}
+data("whale")
+loci<-unique(sub(pattern="_.",replacement="",colnames(whale)[-1]))
+dat<-NULL
+for(i in unique(whale$Location)){
+   x<-(whale[whale$Location==i,])
+   for(j in loci) {
+     loc1<-paste(j,"_1", sep="")
+     loc2<-paste(j,"_2", sep="")
+     count<-table(c(x[,colnames(x)==loc1],
+                    x[,colnames(x)==loc2]))
+     freq<-count/sum(count)
+     y<-data.frame(i,j,freq)
+     dat<-rbind(dat,y)
+   }
+}
+colnames(dat)<-c("Location", "Locus", "Allele", "Frequency")
+head(dat)
+```
+With the whale data, we can display allele frequency information for relevant alleles. With this data, we are able to calculate expected homozygotes and heterozygotes, as well as probabilities of genotypes. 
+Subsetting the data frame with our conditions is as follows
+```{r}
+2*dat[dat$Location=="Antarctica" & 
+        dat$Locus=="GATA028" &
+        dat$Allele==189,]$Frequency *
+  dat[dat$Location=="Antarctica" &
+        dat$Locus=="GATA028" &
+        dat$Allele==201,]$Frequency
+2*dat[dat$Location=="Australia" & 
+        dat$Locus=="GATA028" &
+        dat$Allele==189,]$Frequency *
+  dat[dat$Location=="Australia" &
+        dat$Locus=="GATA028" &
+        dat$Allele==201,]$Frequency
+dat[dat$Location=="Antarctica" &
+      dat$Locus=="Bmy1" &
+      dat$Allele==265,]$Frequency
+dat[dat$Location=="Australia" &
+      dat$Locus=="Bmy1" &
+      dat$Allele==265,]$Frequency
+```
+Then we multiply the individual genotype probabilities together. This gives us the overall probability of a sample random whale coming from the Antarctic population. 
+```{r}
+0.0569*0.00978*0.121*0.0788
+.Last.value*0.0959*0.0192*0.195
+```
+Relative probabilities can be calculated from here. 
+```{r}
+(Ant<-0.0569*0.00978*0.121*0.0788*0.0959*0.0192*0.195)
+(Aus<-0.101*0.00723*0.202*0.303*0.760*0.0492*0.0801)
+(Rat_ant<-Ant/Aus)
+(Rat_aus<-Aus/Ant)
+(Rel_ant<-Ant/(Ant+Aus))
+(Rel_aus<-Aus/(Ant+Aus))
+```
+These probabilities can help us to visualize potential models of population origin.
+```{r}
+pops<-c("Antarctica","Australia")
+color<-c("lightblue1","orange")
+slices<-c(Rel_ant, Rel_aus)
+pie(slices,labels=pops,main="Mystery whale")
+```
+Additional topics: The coalescent
+Modeling the approximation for two lineages with the probability of coalescence at time t.
+```{r}
+exps<-(rexp(1000,1/2))
+hist(exps)
+abline(v=mean(exps),col="blue",lty=2)
+q<-seq(0,max(exps),length=1000)
+z<-dexp(q,1/2)
+par=TRUE
+plot(q,z,lwd=1,axes=F,ann=F,col="red")
+axis(4,las=1,col="red")
+```
+The graph represents 1000 random draws from exponential distribution with a rate of 1/2. Predicted curve is added as well. 
+
+Tests of Neutrality
+To calculate Tajima's D using average pairwise differences, number of SNPs in the dataset, and number of allele copies sampled. 
+```{r}
+theta_IS<-2.8
+S<-16
+n<-20
+i1_sum<-0.0
+for(i in 2:n-1) {
+  i1_sum<-i1_sum+1/i
+}
+theta_W<-S/i1_sum
+i2_sum<-0.0
+for(i in 2:n-1) {
+  i2_sum<-i2_sum+1/i^2
+}
+e1<-((n+1)/(3*(n-1))-1/i1_sum)/i1_sum
+e2<-(2*(n^2+n+3)/(9*n*(n-1))-(n+2)/(n*i1_sum)+i2_sum/i1_sum^2)/
+  (i1_sum^2+i2_sum)
+(D<-(theta_IS-theta_W)/sqrt(e1*S+e2*S*(S-1)))
+```
+Fixation probability under selection and drift
+We can plot the probability of fixation in a small population when the allele starts as a new mutation. 
+```{r}
+N<-100
+curve((1-exp(-2*x))/(1-exp(-4*N*x)),-0.01,0.01,xlab="s",ylab="P(fixation)")
+```
